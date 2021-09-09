@@ -148,7 +148,7 @@
             />
             <div class="text-white col-grow">Powered by BabylonJS & Roland Csibrei, 2021</div>
           </div>
-          <div class="text-white">Matrix calculations code by necips.</div>
+          <div class="text-white">Based on matrix calculations by Necips.</div>
           <div class="text-caption text-grey-7">
             In game music https://www.fesliyanstudios.com <br />
             Intro music https://freemusicarchive.org/music/Siddhartha
@@ -264,6 +264,7 @@ export default defineComponent({
       isGameOver.value = true
       timeDelta.value = -0.4
       scene.gameOver()
+      isDrawerOpen.value = true
     }
 
     let timerStarted = false
