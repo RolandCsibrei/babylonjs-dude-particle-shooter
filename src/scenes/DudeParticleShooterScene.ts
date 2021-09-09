@@ -28,7 +28,8 @@ import {
   AbstractMesh,
   Scalar,
   Sound,
-  KeyboardEventTypes
+  KeyboardEventTypes,
+  Quaternion
 } from '@babylonjs/core'
 import '@babylonjs/loaders'
 import * as GUI from '@babylonjs/gui'
@@ -37,6 +38,7 @@ import { moveCameraTo } from 'src/utils/camera'
 import { colorGradient, screenToWorld } from 'src/utils/babylonjs'
 
 import { BaseScene } from './BaseScene'
+import { Tools } from '@babylonjs/inspector/tools'
 
 interface Piece {
   disabled: boolean
@@ -133,6 +135,16 @@ export class DudeParticleShooterScene extends BaseScene {
     super(canvas)
   }
 
+  public async initScene() {
+    this._scene.clearColor = new Color4(0, 0, 0, 1)
+    this.createCamera()
+    this.createLight()
+
+    this._enableBloom()
+    this._enableGlow()
+    await this._createDudeShooterDemo()
+  }
+
   public setupRenderLoop() {
     this._scene.defaultCursor = 'none'
 
@@ -153,12 +165,12 @@ export class DudeParticleShooterScene extends BaseScene {
     this._scene.defaultCursor = 'cursor'
     this._crosshairEnabled = false
     this._targetingEnabled = false
+    this.rewindTime(-0.4)
     this.setCamera1()
   }
 
   public analyzeShots() {
     this._visualizeShots()
-    this.rewindTime()
   }
 
   public shakeCamera() {
@@ -173,10 +185,10 @@ export class DudeParticleShooterScene extends BaseScene {
     })
   }
 
-  public rewindTime() {
-    this._tickValue = -1
+  public rewindTime(speed = -1) {
+    this._tickValue = speed
     this._allDudePieces.forEach(d => {
-      d.tickDirection = -1
+      d.tickDirection = speed
       d.disabled = false
     })
   }
@@ -193,6 +205,46 @@ export class DudeParticleShooterScene extends BaseScene {
     this._allDudePieces.forEach(d => {
       d.tickDirection = 1
     })
+  }
+
+  public restart() {
+    this._scene.defaultCursor = 'none'
+
+    this._removeVisualizeShots()
+    this._resetDude()
+    this.setCamera0()
+    this._removeBadges()
+    this.normalTime()
+    this._crosshairEnabled = true
+    this._targetingEnabled = true
+  }
+
+  public freeShooting() {
+    this._scene.defaultCursor = 'none'
+
+    this._isGameMode = false
+    this._removeVisualizeShots()
+    this._resetDude()
+    this.setCamera0()
+    this._removeBadges()
+    this.normalTime()
+    this._crosshairEnabled = true
+    this._targetingEnabled = true
+    this._cameraRotation = 0
+  }
+
+  public setCamera0() {
+    const alpha = this._arcCamera.alpha - Math.PI * 1.2
+    const beta = 1.63
+    const radius = 220
+    this._animateCamera(alpha, beta, radius)
+  }
+
+  public setCamera1() {
+    const alpha = this._arcCamera.alpha - 1
+    const beta = 1
+    const radius = 353
+    this._animateCamera(alpha, beta, radius)
   }
 
   private _shakeCamera(duration: number, magnitude: number) {
@@ -516,13 +568,11 @@ export class DudeParticleShooterScene extends BaseScene {
 
         const matrix = Matrix.Compose(vector3One, rotationVector.toQuaternion(), position)
 
-        // if (j % this._drawEvery === 0) {
         matrix.copyToArray(bufferMatrices, (j / this._drawEvery) * 16)
         bufferColors[j * 4 + 0] = dudePieceColor.r
         bufferColors[j * 4 + 1] = dudePieceColor.g
         bufferColors[j * 4 + 2] = dudePieceColor.b
         bufferColors[j * 4 + 3] = 1.0
-        // }
       }
 
       prefab.thinInstanceBufferUpdated('matrix')
@@ -572,7 +622,7 @@ export class DudeParticleShooterScene extends BaseScene {
         to: this._pickedPosition
       })
 
-      if (this._hitCounter > 0 && this._isGameMode) {
+      if (this._hitCounter > 1 && this._isGameMode) {
         this._cameraRotation = -1
       } else {
         this._cameraRotation = 0
@@ -588,13 +638,14 @@ export class DudeParticleShooterScene extends BaseScene {
         const dudePiece = allDudePieces[idx]
 
         dudePiece.isShot = true
-        const direction = normalizedDirection.clone() // .scale(-1)
+        const direction = normalizedDirection.clone()
 
         const random = DudeParticleShooterScene._getRandomInRadius(1)
 
-        direction.x = direction.x + random.x
-        direction.y = direction.y + random.y
-        direction.z = direction.z + (Math.random() * 0.4 - 0.2)
+        const factor = (this._arcCamera.beta - this._arcCamera.lowerBetaLimit) / (this._arcCamera.upperBetaLimit - this._arcCamera.lowerBetaLimit)
+        const quaternion = new Quaternion(random.x, random.y * factor, random.y * (1 - factor), 1)
+        const point = Vector3.ZeroReadOnly
+        direction.rotateByQuaternionAroundPointToRef(quaternion, point, direction)
 
         dudePiece.startPosition.x = dudePiece.position.x
         dudePiece.startPosition.y = dudePiece.position.y
@@ -620,7 +671,7 @@ export class DudeParticleShooterScene extends BaseScene {
 
         dudePiece.ttl = 12000
 
-        dudePiece.speed = speed
+        dudePiece.speed = speed * Math.random() * 4 + 1
       })
     }
   }
@@ -907,54 +958,6 @@ export class DudeParticleShooterScene extends BaseScene {
 
     const light2 = new HemisphericLight('light2', new Vector3(1, 0, -1), this._scene)
     light2.intensity = 0.7
-  }
-
-  public async initScene() {
-    this._scene.clearColor = new Color4(0, 0, 0, 1)
-    this.createCamera()
-    this.createLight()
-
-    this._enableBloom()
-    this._enableGlow()
-    await this._createDudeShooterDemo()
-  }
-
-  public restart() {
-    this._scene.defaultCursor = 'none'
-
-    this._removeVisualizeShots()
-    this._resetDude()
-    this.setCamera0()
-    this._removeBadges()
-    this._crosshairEnabled = true
-    this._targetingEnabled = true
-  }
-
-  public freeShooting() {
-    this._scene.defaultCursor = 'none'
-
-    this._isGameMode = false
-    this._removeVisualizeShots()
-    this._resetDude()
-    this.setCamera0()
-    this._removeBadges()
-    this._crosshairEnabled = true
-    this._targetingEnabled = true
-    this._cameraRotation = 0
-  }
-
-  public setCamera0() {
-    const alpha = this._arcCamera.alpha - Math.PI * 1.2
-    const beta = 1.63
-    const radius = 220
-    this._animateCamera(alpha, beta, radius)
-  }
-
-  public setCamera1() {
-    const alpha = this._arcCamera.alpha - 1
-    const beta = 1
-    const radius = 353
-    this._animateCamera(alpha, beta, radius)
   }
 
   private _animateCamera(alpha: number, beta: number, radius: number, target?: Vector3) {
